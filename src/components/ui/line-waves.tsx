@@ -37,6 +37,7 @@ const hexToRgba = (color: string, opacity: number): string => {
           .map((character: string): string => character + character)
           .join('')
       : value;
+
   const red: number = Number.parseInt(normalized.slice(0, 2), 16);
   const green: number = Number.parseInt(normalized.slice(2, 4), 16);
   const blue: number = Number.parseInt(normalized.slice(4, 6), 16);
@@ -96,6 +97,10 @@ export const LineWaves = ({
     let sharedWave: Float64Array = new Float64Array();
     let xPositions: Float64Array = new Float64Array();
     let horizontalPositions: Float64Array = new Float64Array();
+    let waveSinA: Float64Array = new Float64Array();
+    let waveCosA: Float64Array = new Float64Array();
+    let waveSinB: Float64Array = new Float64Array();
+    let waveCosB: Float64Array = new Float64Array();
 
     const resize = (): void => {
       const bounds: DOMRect = container.getBoundingClientRect();
@@ -121,11 +126,20 @@ export const LineWaves = ({
       sharedWave = new Float64Array(pointCount);
       xPositions = new Float64Array(pointCount);
       horizontalPositions = new Float64Array(pointCount);
+      waveSinA = new Float64Array(pointCount);
+      waveCosA = new Float64Array(pointCount);
+      waveSinB = new Float64Array(pointCount);
+      waveCosB = new Float64Array(pointCount);
 
       for (let point = 0; point < pointCount; point += 1) {
         const x: number = point * 5 - 40;
+        const horizontal: number = x / width;
         xPositions[point] = x;
-        horizontalPositions[point] = x / width;
+        horizontalPositions[point] = horizontal;
+        waveSinA[point] = Math.sin(horizontal * 8.4);
+        waveCosA[point] = Math.cos(horizontal * 8.4);
+        waveSinB[point] = Math.sin(horizontal * 17);
+        waveCosB[point] = Math.cos(horizontal * 17);
       }
 
       canvas.width = canvasWidth;
@@ -142,14 +156,15 @@ export const LineWaves = ({
       const elapsed: number = prefersReducedMotion
         ? 0
         : ((time - (startedAt ?? time)) / 1000) * speed;
+
       const introOpacity: number =
         !intro || prefersReducedMotion
           ? 1
           : isIntroActive
             ? Math.min(1, Math.max(0, (time - introStartedAt) / 900))
             : 0;
-      const spacing: number = height / (lineCount - 1);
 
+      const spacing: number = height / (lineCount - 1);
       for (let point = 0; point < sharedWave.length; point += 1) {
         const horizontal: number = horizontalPositions[point]!;
         sharedWave[point] = Math.sin(horizontal * 3.2 + elapsed * 0.7) * 13;
@@ -169,20 +184,30 @@ export const LineWaves = ({
         const shimmer: number = Math.exp(
           -Math.pow(center - Math.sin(elapsed * 0.55) * 0.16, 2) * 11,
         );
+
         const shimmerOpacity: number = shimmer * shimmerIntensity;
         const lineIntensity: number =
           1 -
           Math.min(Math.max(lineIntensityVariation, 0), 1) *
             ((Math.sin(index * 2.17) + 1) / 2);
+
         const waveAmplitude: number =
           1 +
           Math.min(Math.max(waveAmplitudeVariation, 0), 1) *
             Math.sin(index * 1.31);
+
         const intensity: number =
           (baseIntensity + shimmerOpacity * (1 - baseIntensity)) *
           lineIntensity *
           opacity *
           introOpacity;
+
+        const phaseA: number = elapsed * 2.2 + index * 0.23;
+        const sinPhaseA: number = Math.sin(phaseA);
+        const cosPhaseA: number = Math.cos(phaseA);
+        const phaseB: number = -elapsed * 1.5 + index * 0.1;
+        const sinPhaseB: number = Math.sin(phaseB);
+        const cosPhaseB: number = Math.cos(phaseB);
 
         context.beginPath();
         context.strokeStyle = hexToRgba(
@@ -194,13 +219,14 @@ export const LineWaves = ({
           const x: number = xPositions[point]!;
           const horizontal: number = horizontalPositions[point]!;
           const wave: number =
-            Math.sin(horizontal * 8.4 + elapsed * 2.2 + index * 0.23) *
+            (waveSinA[point]! * cosPhaseA + waveCosA[point]! * sinPhaseA) *
               18 *
               waveAmplitude +
-            Math.sin(horizontal * 17 - elapsed * 1.5 + index * 0.1) *
+            (waveSinB[point]! * cosPhaseB + waveCosB[point]! * sinPhaseB) *
               6 *
               waveAmplitude +
             sharedWave[point]!;
+
           const y: number =
             index * spacing + wave + (horizontal - 0.5) * height * -0.16;
 
@@ -222,6 +248,7 @@ export const LineWaves = ({
           width,
           0,
         );
+
         edgeGradient.addColorStop(0, 'rgb(0 0 0 / 0)');
         edgeGradient.addColorStop(fadeSize * 0.4, 'rgb(0 0 0 / 0.12)');
         edgeGradient.addColorStop(fadeSize * 0.75, 'rgb(0 0 0 / 0.7)');
@@ -279,6 +306,7 @@ export const LineWaves = ({
       resize();
       restart();
     });
+
     const visibilityObserver: IntersectionObserver = new IntersectionObserver(
       ([entry]: IntersectionObserverEntry[]): void => {
         isVisible = entry?.isIntersecting ?? false;
